@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarkItDown 测试页面</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .preview-container {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .history-item {
+            border-left: 3px solid #007bff;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+        }
+        .progress {
+            display: none;
+            margin-top: 10px;
+        }
+        #supported-formats {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .format-group {
+            margin-bottom: 15px;
+        }
+        .format-group h6 {
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">MarkItDown 文件转换测试</h1>
+        
+        <!-- 文件上传区域 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">文件上传</h5>
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" class="mb-3">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">选择要转换的文件</label>
+                        <input type="file" class="form-control" id="file" name="file">
+                    </div>
+                    <button type="submit" class="btn btn-primary">上传并转换</button>
+                </form>
+                
+                <!-- 进度条 -->
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         aria-valuenow="0" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 支持的格式 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">支持的文件格式</h5>
+            </div>
+            <div class="card-body" id="supported-formats">
+                <!-- 由JavaScript动态填充 -->
+            </div>
+        </div>
+
+        <!-- 转换结果预览 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">转换结果</h5>
+            </div>
+            <div class="card-body">
+                <div id="result" class="preview-container"></div>
+            </div>
+        </div>
+
+        <!-- 转换历史 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">转换历史</h5>
+            </div>
+            <div class="card-body">
+                <div id="history"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 获取支持的格式
+        async function loadSupportedFormats() {
+            try {
+                const response = await fetch('http://localhost:8000/api/supported-formats');
+                const data = await response.json();
+                const container = document.getElementById('supported-formats');
+                
+                // 清空容器
+                container.innerHTML = '';
+                
+                // 按分组显示格式和依赖
+                for (const [group, info] of Object.entries(data.dependencies)) {
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'format-group';
+                    
+                    groupDiv.innerHTML = `
+                        <h6 class="text-primary">${group.charAt(0).toUpperCase() + group.slice(1)}</h6>
+                        <p class="mb-1"><strong>格式：</strong>${info.formats.join(', ')}</p>
+                        <p class="mb-2"><small class="text-muted"><strong>依赖：</strong>${info.dependencies.join(', ')}</small></p>
+                    `;
+                    
+                    container.appendChild(groupDiv);
+                }
+            } catch (error) {
+                console.error('加载支持的格式失败:', error);
+            }
+        }
+
+        // 获取转换历史
+        async function loadHistory() {
+            try {
+                const response = await fetch('http://localhost:8000/api/history');
+                const data = await response.json();
+                const historyDiv = document.getElementById('history');
+                
+                historyDiv.innerHTML = data.map(item => `
+                    <div class="history-item">
+                        <div class="d-flex justify-content-between">
+                            <strong>${item.filename}</strong>
+                            <small class="text-muted">${new Date(item.created_at).toLocaleString()}</small>
+                        </div>
+                        <div>状态: ${item.status}</div>
+                        <div>文件大小: ${(item.file_size / 1024).toFixed(2)} KB</div>
+                        <div>转换时间: ${item.conversion_time.toFixed(3)}s</div>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-primary" 
+                                    onclick="showContent('${item.converted_content.replace(/'/g, "\\'")}')">
+                                查看内容
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('加载历史记录失败:', error);
+            }
+        }
+
+        // 显示转换内容
+        function showContent(content) {
+            document.getElementById('result').innerHTML = `<pre>${content}</pre>`;
+        }
+
+        // 处理文件上传
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('请选择文件');
+                return;
+            }
+            
+            formData.append('file', file);
+            
+            // 显示进度条
+            const progressBar = document.querySelector('.progress');
+            const progressBarInner = progressBar.querySelector('.progress-bar');
+            progressBar.style.display = 'block';
+            progressBarInner.style.width = '0%';
+            progressBarInner.setAttribute('aria-valuenow', 0);
+            
+            try {
+                // 模拟上传进度
+                const progressInterval = setInterval(() => {
+                    const currentWidth = parseInt(progressBarInner.style.width) || 0;
+                    if (currentWidth < 90) {
+                        const newWidth = currentWidth + 10;
+                        progressBarInner.style.width = `${newWidth}%`;
+                        progressBarInner.setAttribute('aria-valuenow', newWidth);
+                    }
+                }, 200);
+                
+                const response = await fetch('http://localhost:8000/api/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                clearInterval(progressInterval);
+                progressBarInner.style.width = '100%';
+                progressBarInner.setAttribute('aria-valuenow', 100);
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showContent(data.content);
+                    await loadHistory();
+                } else {
+                    throw new Error(data.detail || '转换失败');
+                }
+            } catch (error) {
+                console.error('上传失败:', error);
+                alert('上传失败: ' + error.message);
+            } finally {
+                // 3秒后隐藏进度条
+                setTimeout(() => {
+                    progressBar.style.display = 'none';
+                }, 3000);
+            }
+        });
+
+        // 页面加载时获取支持的格式和历史记录
+        window.addEventListener('load', () => {
+            loadSupportedFormats();
+            loadHistory();
+        });
+    </script>
+</body>
+</html>
