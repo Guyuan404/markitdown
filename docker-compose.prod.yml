@@ -3,9 +3,6 @@ version: '3'
 services:
   frontend:
     image: guyuan404643/markitdown-frontend:latest
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     depends_on:
@@ -15,9 +12,6 @@ services:
 
   backend:
     image: guyuan404643/markitdown-backend:latest
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
     ports:
       - "8008:8008"
     environment:
