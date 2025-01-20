@@ -107,3 +107,189 @@
 - **数据库**: SQLite (通过SQLAlchemy)
 - **文件转换**: markitdown库
 - **测试工具**: 基于HTML的测试页面
+
+## API 文档
+
+### 端点概览
+
+#### 文件转换
+- **POST** `/api/convert`
+  - 功能：将上传的文件转换为 Markdown 格式
+  - 请求：
+    ```
+    Content-Type: multipart/form-data
+    Body:
+      - file: 要转换的文件
+    ```
+  - 响应：
+    ```json
+    {
+      "id": 1,
+      "filename": "example.docx",
+      "original_size": 1024,
+      "converted_size": 512,
+      "conversion_time": "2025-01-20T10:30:00",
+      "status": "success",
+      "markdown_content": "# Converted Content..."
+    }
+    ```
+
+#### 历史记录
+- **GET** `/api/history`
+  - 功能：获取转换历史记录
+  - 参数：
+    - `skip`: 跳过的记录数（分页）
+    - `limit`: 返回的记录数（分页）
+  - 响应：
+    ```json
+    {
+      "total": 100,
+      "items": [
+        {
+          "id": 1,
+          "filename": "example.docx",
+          "conversion_time": "2025-01-20T10:30:00",
+          "status": "success"
+        }
+      ]
+    }
+    ```
+
+- **GET** `/api/conversion/{conversion_id}`
+  - 功能：获取特定转换记录的详细信息
+  - 参数：
+    - `conversion_id`: 转换记录的 ID
+  - 响应：
+    ```json
+    {
+      "id": 1,
+      "filename": "example.docx",
+      "original_size": 1024,
+      "converted_size": 512,
+      "conversion_time": "2025-01-20T10:30:00",
+      "status": "success",
+      "markdown_content": "# Converted Content..."
+    }
+    ```
+
+### 错误处理
+所有端点在发生错误时返回统一格式的错误响应：
+```json
+{
+  "detail": {
+    "message": "错误描述",
+    "code": "ERROR_CODE"
+  }
+}
+```
+
+常见错误代码：
+- `FILE_TOO_LARGE`: 文件超过大小限制
+- `UNSUPPORTED_FORMAT`: 不支持的文件格式
+- `CONVERSION_FAILED`: 转换失败
+- `NOT_FOUND`: 记录不存在
+
+## 技术架构
+
+### 后端架构
+1. **Web 框架**
+   - FastAPI：异步 Web 框架
+   - Uvicorn：ASGI 服务器
+   - Pydantic：数据验证和序列化
+
+2. **数据库**
+   - SQLAlchemy：ORM
+   - SQLite：数据存储
+   - Alembic：数据库迁移
+
+3. **文件处理**
+   - MarkItDown：核心转换库
+   - Python-Magic：文件类型检测
+   - aiofiles：异步文件操作
+
+4. **中间件**
+   - CORS：跨域资源共享
+   - Authentication：身份认证（待实现）
+   - Rate Limiting：请求限制（待实现）
+
+### 前端架构
+1. **框架和库**
+   - React：UI 框架
+   - TailwindCSS：样式框架
+   - Axios：HTTP 客户端
+
+2. **主要组件**
+   - FileUpload：文件上传组件
+   - ConversionHistory：历史记录组件
+   - MarkdownPreview：Markdown 预览组件
+   - ProgressBar：进度条组件
+
+### Docker 部署
+1. **容器化**
+   - 前端：Node.js + Nginx
+   - 后端：Python + Uvicorn
+   - 数据库：SQLite（容器内）
+
+2. **网络配置**
+   - 前端端口：3000
+   - 后端端口：8000
+   - Nginx 反向代理：/api -> 后端服务
+
+## Bug 处理日志
+
+### 2025-01-20 - Docker 环境中的前端构建问题
+
+1. **问题描述**：
+   - 前端容器中出现 "npm not found" 错误
+   - Nginx 无法正确提供静态文件服务
+
+2. **调试过程**：
+   - 检查 Dockerfile 多阶段构建配置
+   - 验证 nginx.conf 配置
+   - 测试静态文件路径映射
+
+3. **解决方案**：
+   - 更新 Dockerfile 使用多阶段构建
+   - 修改 nginx.conf 添加正确的路由配置
+   - 设置适当的文件权限和目录结构
+
+4. **改进措施**：
+   - 增加构建过程的日志记录
+   - 添加文件大小限制配置
+   - 优化 Nginx 缓存配置
+
+### 2025-01-20 - 后端静态文件冲突
+
+1. **问题描述**：
+   - 后端和前端同时尝试提供静态文件服务
+   - 导致路由冲突和 404 错误
+
+2. **解决方案**：
+   - 移除后端的静态文件服务
+   - 统一使用 Nginx 提供静态文件
+   - 更新 API 路由配置
+
+3. **预防措施**：
+   - 明确服务职责分离
+   - 完善路由文档
+   - 添加配置检查脚本
+
+## 下一步开发计划
+
+1. **功能增强**
+   - 实现用户认证系统
+   - 添加文件批量处理
+   - 支持更多文件格式
+   - 添加文件预览功能
+
+2. **性能优化**
+   - 实现文件处理队列
+   - 添加结果缓存
+   - 优化大文件处理
+   - 添加性能监控
+
+3. **部署优化**
+   - 设置 CI/CD 流程
+   - 添加自动化测试
+   - 优化 Docker 配置
+   - 准备生产环境部署文档
