@@ -232,7 +232,14 @@ async def convert_file(
         db.commit()
         db.refresh(conversion)
         
-        return JSONResponse(result)
+        return JSONResponse({
+            "id": conversion.id,
+            "filename": conversion.filename,
+            "markdown_content": converted_content,
+            "status": "success",
+            "conversion_time": conversion.created_at.isoformat(),
+            "original_size": conversion.file_size
+        })
         
     except Exception as e:
         raise HTTPException(
@@ -283,3 +290,20 @@ async def get_conversion(
         )
     
     return conversion
+
+@app.delete("/api/conversion/{conversion_id}")
+async def delete_conversion(
+    conversion_id: int,
+    db: Session = Depends(get_db)
+):
+    """删除特定的转换记录"""
+    conversion = db.query(models.Conversion).filter(models.Conversion.id == conversion_id).first()
+    if not conversion:
+        raise HTTPException(status_code=404, detail={
+            "message": "Conversion not found",
+            "code": "NOT_FOUND"
+        })
+    
+    db.delete(conversion)
+    db.commit()
+    return {"message": "Conversion deleted successfully"}

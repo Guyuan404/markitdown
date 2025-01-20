@@ -14,33 +14,33 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [convertedFiles, setConvertedFiles] = useState([]);
 
+  const loadHistory = async () => {
+    try {
+      const response = await fetch('/api/history');
+      const data = await response.json();
+      setConversions(data);
+    } catch (error) {
+      toast.error('Failed to load conversion history');
+    }
+  };
+
   useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        const response = await fetch('/api/history');
-        const data = await response.json();
-        setConversions(data);
-      } catch (error) {
-        toast.error('Failed to load conversion history');
-      }
-    };
     loadHistory();
   }, []);
 
-  const downloadFiles = async () => {
-    if (convertedFiles.length === 0) {
+  const downloadFiles = async (files = convertedFiles) => {
+    if (files.length === 0) {
       toast.info('No files to download');
       return;
     }
 
-    if (convertedFiles.length === 1) {
+    if (files.length === 1) {
       // 单文件下载
-      const file = convertedFiles[0];
+      const file = files[0];
       const blob = new Blob([file.content], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      // 确保文件名存在，如果不存在则使用默认名称
       const filename = file.filename 
         ? file.filename.replace(/\.[^/.]+$/, '') + '.md'
         : 'converted.md';
@@ -50,14 +50,12 @@ function App() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } else {
-      // 批量下载为 ZIP
+      // 多文件打包下载
       const zip = new JSZip();
-      
-      convertedFiles.forEach((file, index) => {
-        // 确保文件名存在，如果不存在则使用默认名称
-        const filename = file.filename 
+      files.forEach((file) => {
+        const filename = file.filename
           ? file.filename.replace(/\.[^/.]+$/, '') + '.md'
-          : `converted_${index + 1}.md`;
+          : 'converted.md';
         zip.file(filename, file.content);
       });
       
@@ -73,9 +71,11 @@ function App() {
     }
   };
 
-  const handleFileConversion = async (file) => {
+  const handleFileSelect = async (file, shouldDownload) => {
     setIsUploading(true);
     setUploadProgress(0);
+    setConvertedContent('');
+    setConvertedFiles([]);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -83,90 +83,86 @@ function App() {
     try {
       const response = await axios.post('/api/convert', formData, {
         onUploadProgress: (progressEvent) => {
-          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
           setUploadProgress(progress);
-        }
+        },
       });
 
-      if (response.data.type === 'zip') {
-        setConvertedFiles(response.data.files.filter(f => f.status === 'success'));
-        setConvertedContent(
-          response.data.files
-            .map(f => `# ${f.filename}\n\n${f.content}`)
-            .join('\n\n---\n\n')
-        );
-        
-        const successCount = response.data.files.filter(f => f.status === 'success').length;
-        const failCount = response.data.files.filter(f => f.status === 'error').length;
-        
-        toast.success(
-          `Successfully converted ${successCount} file${successCount !== 1 ? 's' : ''}` +
-          (failCount > 0 ? `, ${failCount} file${failCount !== 1 ? 's' : ''} failed` : '')
-        );
-      } else {
-        setConvertedContent(response.data.content);
-        setConvertedFiles([{
-          filename: response.data.filename,
-          content: response.data.content
-        }]);
-        toast.success('File converted successfully!');
+      const { markdown_content, filename } = response.data;
+      setConvertedContent(markdown_content);
+      setConvertedFiles([{ content: markdown_content, filename }]);
+      
+      if (shouldDownload) {
+        downloadFiles([{ content: markdown_content, filename }]);
       }
       
-      // 更新历史记录
-      setConversions(prev => [{
-        id: Date.now(),
-        filename: file.name,
-        timestamp: new Date().toISOString(),
-        status: 'success'
-      }, ...prev]);
-      
+      loadHistory();
+      toast.success('File converted successfully');
     } catch (error) {
-      toast.error('Failed to convert file');
+      console.error('Conversion error:', error);
+      toast.error(error.response?.data?.detail || 'Failed to convert file');
     } finally {
       setIsUploading(false);
-      setUploadProgress(0);
+    }
+  };
+
+  const handleHistorySelect = async (conversion) => {
+    try {
+      const response = await fetch(`/api/conversion/${conversion.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to load conversion');
+      }
+      const data = await response.json();
+      setConvertedContent(data.converted_content || data.markdown_content);
+      setConvertedFiles([{
+        content: data.converted_content || data.markdown_content,
+        filename: conversion.filename
+      }]);
+    } catch (error) {
+      console.error('History load error:', error);
+      toast.error('Failed to load conversion');
+    }
+  };
+
+  const handleDelete = async (conversionId) => {
+    try {
+      await fetch(`/api/conversion/${conversionId}`, {
+        method: 'DELETE',
+      });
+      toast.success('Conversion deleted');
+      loadHistory();
+    } catch (error) {
+      toast.error('Failed to delete conversion');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-center mb-8">MarkItDown</h1>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <FileUpload 
-              onFileSelect={handleFileConversion}
-              isUploading={isUploading}
-              uploadProgress={uploadProgress}
-              toast={toast}
-            />
-            
-            {convertedFiles.length > 0 && (
-              <div className="mb-8">
-                <button
-                  onClick={downloadFiles}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition-colors duration-300"
-                >
-                  Download {convertedFiles.length > 1 ? 'All Files (ZIP)' : 'Converted File'}
-                </button>
-              </div>
-            )}
-            
-            <ConversionHistory 
-              conversions={conversions}
-              onSelect={(conversion) => {
-                setConvertedContent(conversion.converted_content);
-              }}
-            />
-          </div>
-          
-          <div>
-            <MarkdownPreview content={convertedContent} />
-          </div>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <h1 className="text-3xl font-bold text-center mb-8">MarkItDown</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <FileUpload
+            onFileSelect={handleFileSelect}
+            isUploading={isUploading}
+            uploadProgress={uploadProgress}
+            toast={toast}
+          />
+          <ConversionHistory
+            conversions={conversions}
+            onSelect={handleHistorySelect}
+            onDelete={handleDelete}
+          />
+        </div>
+        <div>
+          <MarkdownPreview
+            content={convertedContent}
+            onDownload={() => downloadFiles()}
+          />
         </div>
       </div>
-      <ToastContainer />
+      <ToastContainer position="bottom-right" />
     </div>
   );
 }

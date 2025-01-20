@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 const SUPPORTED_FORMATS = [
@@ -8,6 +8,8 @@ const SUPPORTED_FORMATS = [
 ];
 
 function FileUpload({ onFileSelect, isUploading, uploadProgress, toast }) {
+  const [downloadAfterConversion, setDownloadAfterConversion] = useState(false);
+
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -18,8 +20,8 @@ function FileUpload({ onFileSelect, isUploading, uploadProgress, toast }) {
       return;
     }
 
-    onFileSelect(file);
-  }, [onFileSelect, toast]);
+    onFileSelect(file, downloadAfterConversion);
+  }, [onFileSelect, toast, downloadAfterConversion]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -32,7 +34,7 @@ function FileUpload({ onFileSelect, isUploading, uploadProgress, toast }) {
     <div className="mb-8">
       <div
         {...getRootProps()}
-        className={`p-8 border-2 border-dashed rounded-lg text-center transition-all duration-300
+        className={`p-8 border-2 border-dashed rounded-lg text-center transition-all duration-300 mb-4
           ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}
           ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
       >
@@ -49,21 +51,28 @@ function FileUpload({ onFileSelect, isUploading, uploadProgress, toast }) {
               </div>
             </div>
           ) : isDragActive ? (
-            <p>Drop the file here ...</p>
+            <p>Drop the file here</p>
           ) : (
             <div>
-              <p className="text-lg font-semibold mb-2">
-                Drag and drop a file here, or click to select
-              </p>
-              <p className="text-sm text-gray-500">
-                Supported formats: PDF, DOCX, XLSX, Images, ZIP, and more
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                ZIP files will be extracted and processed automatically
+              <p>Drag and drop a file here, or click to select a file</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Supported formats: {SUPPORTED_FORMATS.join(', ')}
               </p>
             </div>
           )}
         </div>
+      </div>
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="downloadAfterConversion"
+          checked={downloadAfterConversion}
+          onChange={(e) => setDownloadAfterConversion(e.target.checked)}
+          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <label htmlFor="downloadAfterConversion" className="ml-2 text-sm text-gray-600">
+          Download file after conversion
+        </label>
       </div>
     </div>
   );
